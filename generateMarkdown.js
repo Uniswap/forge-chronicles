@@ -7,7 +7,8 @@ const projectGitUrl = getProjectUrl();
 const projectName = getProjectName();
 
 function getNetworkName(chainId) {
-  return chains[chainId]?.name || `Chain ${chainId}`;
+  const chain = chains.find(chain => chain.chainId === parseInt(chainId));
+  return chain?.name || `Chain ${chainId}`;
 }
 
 function generateAndSaveMarkdown(input) {
@@ -110,7 +111,7 @@ function generateIndexMarkdown(currentChainId) {
   
   chainFiles.forEach(chainId => {
     const networkName = getNetworkName(chainId);
-    indexContent += `| ${chainId} | ${networkName} | [View Deployment](${chainId}.md) |\n`;
+    indexContent += `| ${chainId} | ${networkName} | [View Deployment](./${chainId}.md) |\n`;
   });
 
   writeFileSync(join(deploymentsDir, 'index.md'), indexContent, "utf-8");
