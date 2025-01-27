@@ -1,11 +1,42 @@
 const { execSync } = require("child_process");
-const { writeFileSync } = require("fs");
+const { writeFileSync, readdirSync, existsSync, readFileSync } = require("fs");
 const { join } = require("path");
+const axios = require('axios');
 
 const projectGitUrl = getProjectUrl();
 const projectName = getProjectName();
 
-function generateAndSaveMarkdown(input) {
+async function fetchNetworkNames() {
+  try {
+    const response = await axios.get('https://chainid.network/chains_mini.json');
+    const networks = {};
+    response.data.forEach(chain => {
+      networks[chain.chainId] = chain.name;
+    });
+    return networks;
+  } catch (error) {
+    console.warn("Error fetching chain data:", error.message);
+    return getFallbackNetworks();
+  }
+}
+
+function getFallbackNetworks() {
+  return {
+    1: "Ethereum Mainnet",
+    5: "Goerli Testnet",
+    11155111: "Sepolia Testnet",
+    137: "Polygon Mainnet",
+    80001: "Mumbai Testnet",
+    31337: "Local Hardhat/Anvil",
+  };
+}
+
+async function getNetworkName(chainId) {
+  const networks = await fetchNetworkNames();
+  return networks[chainId] || `Chain ${chainId}`;
+}
+
+async function generateAndSaveMarkdown(input) {
   let out = `# ${projectName}\n\n`;
 
   out += `\n### Table of Contents\n- [Summary](#summary)\n- [Contracts](#contracts)\n\t- `;
@@ -84,7 +115,34 @@ function generateAndSaveMarkdown(input) {
   ${deploymentHistoryMd}`;
 
   writeFileSync(join(__dirname, `../../deployments/${input.chainId}.md`), out, "utf-8");
-  console.log("Generation complete!");
+  console.log("Chain deployment log generated!");
+  
+  // Generate or update the index file
+  await generateIndexMarkdown(input.chainId);
+  console.log("Index file updated!");
+}
+
+async function generateIndexMarkdown(currentChainId) {
+  const deploymentsDir = join(__dirname, "../../deployments");
+  const chainFiles = readdirSync(deploymentsDir)
+    .filter(file => file.endsWith('.md') && file !== 'index.md')
+    .map(file => parseInt(file.replace('.md', '')))
+    .sort((a, b) => a - b);
+
+  let indexContent = `# ${projectName} Deployments\n\n`;
+  indexContent += `This repository contains deployment information for the following networks:\n\n`;
+  indexContent += `| Chain ID | Network Name | Deployment Details |\n`;
+  indexContent += `|----------|--------------|-------------------|\n`;
+
+  // Get all network names in parallel
+  const networkNames = await Promise.all(chainFiles.map(chainId => getNetworkName(chainId)));
+  
+  chainFiles.forEach((chainId, index) => {
+    const networkName = networkNames[index];
+    indexContent += `| ${chainId} | ${networkName} | [View Deployment](${chainId}.md) |\n`;
+  });
+
+  writeFileSync(join(deploymentsDir, 'index.md'), indexContent, "utf-8");
 }
 
 function getEtherscanLink(chainId, address, slug = "address") {
