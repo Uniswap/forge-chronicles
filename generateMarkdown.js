@@ -1,10 +1,16 @@
 const { execSync } = require("child_process");
-const { writeFileSync } = require("fs");
+const { writeFileSync, readdirSync, existsSync, readFileSync } = require("fs");
 const { join } = require("path");
+const chains = require("./chains.json");
 
 const projectGitUrl = getProjectUrl();
 const projectName = getProjectName();
 let explorer;
+
+function getNetworkName(chainId) {
+  const chain = chains.find((chain) => chain.chainId === parseInt(chainId));
+  return chain?.name || `Chain ${chainId}`;
+}
 
 function generateAndSaveMarkdown(input, explorerUrl) {
   explorer = explorerUrl;
@@ -54,15 +60,15 @@ function generateAndSaveMarkdown(input, explorerUrl) {
         contractName,
         { address, deploymentTxn, version, commitHash, timestamp, proxyType, implementation, proxyAdmin },
       ]) => `### ${contractName.replace(/([A-Z])/g, " $1").trim()}
-  
+
 Address: ${getEtherscanLinkMd(input.chainId, address)}
-  
+
 ${deploymentTxn ? `Deployment Transaction: ${getEtherscanLinkMd(input.chainId, deploymentTxn, "tx")}` : ""}
-  
+
 ${typeof version === "undefined" ? "" : `Version: [${version}](${projectGitUrl}/releases/tag/${version})`}
-  
+
 ${commitHash ? `Commit Hash: [${commitHash.slice(0, 7)}](${projectGitUrl}/commit/${commitHash})` : ``}
-  
+
 ${prettifyTimestamp(timestamp)}
 ${generateProxyInformationIfProxy({
   address,
@@ -79,11 +85,35 @@ ${generateProxyInformationIfProxy({
   out += `
 
 ## Deployment History
-  
+
 ${deploymentHistoryMd}`;
 
   writeFileSync(join(__dirname, `../../deployments/${input.chainId}.md`), out, "utf-8");
-  console.log("Generation complete!");
+  console.log("Chain deployment log generated!");
+
+  // Generate or update the index file
+  generateIndexMarkdown(input.chainId);
+  console.log("Index file updated!");
+}
+
+function generateIndexMarkdown(currentChainId) {
+  const deploymentsDir = join(__dirname, "../../deployments");
+  const chainFiles = readdirSync(deploymentsDir)
+    .filter((file) => file.endsWith(".md") && file !== "index.md")
+    .map((file) => parseInt(file.replace(".md", "")))
+    .sort((a, b) => a - b);
+
+  let indexContent = `# ${projectName} Deployments\n\n`;
+  indexContent += `This repository contains deployment information for the following networks:\n\n`;
+  indexContent += `| Chain ID | Network Name | Deployment Details |\n`;
+  indexContent += `|----------|--------------|-------------------|\n`;
+
+  chainFiles.forEach((chainId) => {
+    const networkName = getNetworkName(chainId);
+    indexContent += `| ${chainId} | ${networkName} | [View Deployment](./${chainId}.md) |\n`;
+  });
+
+  writeFileSync(join(deploymentsDir, "index.md"), indexContent, "utf-8");
 }
 
 function getEtherscanLink(chainId, address, slug = "address") {
@@ -195,11 +225,11 @@ function generateDeploymentHistory(history, chainId) {
           ? version
           : `[${version}](${projectGitUrl}/releases/tag/${version})`
       }
-  
+
   ${contractInfos[0].highestVersion === ghostVersion ? "" : prettifyTimestamp(contractInfos[0].contract.timestamp)}
-  
+
 Deployed contracts:
-  
+
 ${contractInfos
   .map(
     ({ contract, contractName }) => `<details>
@@ -242,8 +272,8 @@ ${
         isAddress(value) || isTransaction(value)
           ? getEtherscanLinkAnchor(chainId, value, isTransaction(value) ? "tx" : "address")
           : typeof value === "object" && value !== null
-          ? JSON.stringify(value)
-          : value
+            ? JSON.stringify(value)
+            : value
       }</td>
     </tr>`,
       )
@@ -258,7 +288,7 @@ ${
 </details>`
     }`,
   )
-  .join("\n")}    
+  .join("\n")}
   `,
     )
     .join("\n\n");
