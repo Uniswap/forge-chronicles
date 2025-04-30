@@ -109,6 +109,7 @@ function generateIndexMarkdown(currentChainId) {
   indexContent += `|----------|--------------|-------------------|\n`;
 
   chainFiles.forEach((chainId) => {
+    if (chainId === 1337 || chainId === 31337) return;
     const networkName = getNetworkName(chainId);
     indexContent += `| ${chainId} | ${networkName} | [View Deployment](./${chainId}.md) |\n`;
   });
