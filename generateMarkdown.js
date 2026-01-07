@@ -18,14 +18,7 @@ function generateAndSaveMarkdown(input, explorerUrl) {
 
   out += `\n### Table of Contents\n- [Summary](#summary)\n- [Contracts](#contracts)\n\t- `;
   out += Object.keys(input.latest)
-    .map(
-      (c) =>
-        `[${c.replace(/([A-Z])/g, " $1").trim()}](#${c
-          .replace(/([A-Z])/g, "-$1")
-          .trim()
-          .slice(1)
-          .toLowerCase()})`,
-    )
+    .map((c) => `[${prettifyContractName(c)}](#${getContractAnchorId(c)})`)
     .join("\n\t- ");
   out += `\n- [Deployment History](#deployment-history)`;
   const { deploymentHistoryMd, allVersions } = generateDeploymentHistory(input.history, input.chainId);
@@ -59,7 +52,7 @@ function generateAndSaveMarkdown(input, explorerUrl) {
       ([
         contractName,
         { address, deploymentTxn, version, commitHash, timestamp, proxyType, implementation, proxyAdmin },
-      ]) => `### ${contractName.replace(/([A-Z])/g, " $1").trim()}
+      ]) => `### ${prettifyContractName(contractName)}
 
 Address: ${getEtherscanLinkMd(input.chainId, address)}
 
@@ -205,7 +198,7 @@ function generateDeploymentHistory(history, chainId) {
       (highest, { version }) => (version && version > highest ? version : highest),
       ghostVersion,
     );
-    const key = highestVersion === ghostVersion ? new Date(timestamp * 1000).toDateString() : highestVersion;
+    const key = highestVersion === ghostVersion ? new Date(timestamp).toDateString() : highestVersion;
     obj[key] = [
       ...(obj[key] || []),
       ...Object.entries(contracts).map(([contractName, contract]) => ({
@@ -235,9 +228,9 @@ ${contractInfos
   .map(
     ({ contract, contractName }) => `<details>
   <summary>
-    <a href="${getEtherscanLink(chainId, contract.address) || contract.address}">${contractName
-      .replace(/([A-Z])/g, " $1")
-      .trim()}</a>${
+    <a href="${getEtherscanLink(chainId, contract.address) || contract.address}">${prettifyContractName(
+      contractName,
+    )}</a>${
       contract.proxyType
         ? ` (<a href="${
             getEtherscanLink(chainId, contract.implementation) || contract.implementation
@@ -298,7 +291,7 @@ ${
 }
 
 function prettifyTimestamp(timestamp) {
-  return new Date(timestamp * 1000).toUTCString().replace("GMT", "UTC") + "\n";
+  return new Date(timestamp).toUTCString().replace("GMT", "UTC") + "\n";
 }
 
 function isTransaction(str) {
@@ -307,6 +300,24 @@ function isTransaction(str) {
 
 function isAddress(str) {
   return /^0x([A-Fa-f0-9]{40})$/.test(str);
+}
+
+// Prettify contract name, handling tags like "Router#v1" -> "Router (v1)"
+function prettifyContractName(name) {
+  const [base, tag] = name.split("#");
+  const spacedBase = base.replace(/([A-Z])/g, " $1").trim();
+  return tag ? `${spacedBase} (${tag})` : spacedBase;
+}
+
+// Get anchor ID for contract name (for table of contents links)
+function getContractAnchorId(name) {
+  const [base, tag] = name.split("#");
+  const anchorBase = base
+    .replace(/([A-Z])/g, "-$1")
+    .trim()
+    .slice(1)
+    .toLowerCase();
+  return tag ? `${anchorBase}-${tag.toLowerCase()}` : anchorBase;
 }
 
 function getProjectUrl() {

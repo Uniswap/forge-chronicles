@@ -39,9 +39,33 @@ Supplying the RPC url is _required_ when an upgrade is deployed for a transparen
 | --broadcast-dir | -b    | Directory where the broadcast files are stored (default: broadcast)        |
 | --out-dir       | -o    | Directory where the foundry output files are stored (default: out)         |
 | --force         | -f    | Force the generation of the json file with the same commit                 |
+| --tag           | -t    | Map initcode hash to label, e.g. `--tag a1b2c3d4:v1` (repeatable)          |
+| --tag-address   | -ta   | Map address to label for legacy entries (repeatable)                       |
 | Options         |       |                                                                            |
 | --help          | -h    | Print help                                                                 |
 | --version       | -v    | Print the version number                                                   |
+
+## Duplicate Contract Names
+
+When deploying the same contract with different bytecode (e.g., different versions), the library automatically tags them with the first 4 bytes of their keccak256(initcode):
+
+- `Router#a1b2c3d4`
+- `Router#e5f6g7h8`
+
+Use `--tag` to provide friendly names:
+
+```bash
+node lib/forge-chronicles Deploy.s.sol -c 1 -r $RPC_URL \
+  --tag a1b2c3d4:v1 \
+  --tag e5f6g7h8:v2
+```
+
+For legacy entries without stored initcode hash, use `--tag-address`:
+
+```bash
+node lib/forge-chronicles Deploy.s.sol -c 1 -r $RPC_URL \
+  --tag-address 0x1234...abcd:legacy
+```
 
 ## License
 
