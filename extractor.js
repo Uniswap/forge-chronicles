@@ -14,7 +14,7 @@ Note: Only TransparentUpgradeableProxy by OpenZeppelin is supported at the momen
 */
 
 // Note: Do not force in production.
-async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastDir, outDir) {
+async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastDir, outDir, tags = {}, tagAddresses = {}) {
   // ========== PREPARE FILES ==========
 
   // Latest broadcast
@@ -59,6 +59,7 @@ async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastD
     proxyType: "TransparentUpgradeableProxy",
     deploymentTxn: "",
     proxyAdmin: "",
+    initcodeHash: "",
     input: {},
   };
 
@@ -67,6 +68,7 @@ async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastD
     proxy: false,
     version: "",
     deploymentTxn: "",
+    initcodeHash: "",
     input: {},
   };
 
@@ -136,19 +138,21 @@ async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastD
             version: await getVersion(matchedItem.address, rpcUrl),
             proxyType: matchedItem.proxyType,
             deploymentTxn: matchedItem.deploymentTxn,
+            initcodeHash: computeInitcodeHash(currentTransaction.transaction.input),
             input: {
               constructor: matchConstructorInputs(getABI(contractName, outDir), currentTransaction.arguments),
             },
           };
 
           // Append it to history item
-          contracts[contractName] = upgradeableItem;
+          const storageKey1 = getStorageKey(contractName, upgradeableItem.initcodeHash);
+          contracts[storageKey1] = upgradeableItem;
           // Update latest item
           let copyOfUpgradeableItem = { ...upgradeableItem };
           delete copyOfUpgradeableItem.input;
           copyOfUpgradeableItem.timestamp = jsonData.timestamp;
           copyOfUpgradeableItem.commitHash = jsonData.commit;
-          recordData.latest[contractName] = copyOfUpgradeableItem;
+          recordData.latest[storageKey1] = copyOfUpgradeableItem;
         } else {
           // The latest wasn't upgradeable
           // CASE: Existing non-upgradeable contract
@@ -157,19 +161,21 @@ async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastD
             address: currentTransaction.contractAddress,
             version: await getVersion(currentTransaction.contractAddress, rpcUrl),
             deploymentTxn: currentTransaction.hash,
+            initcodeHash: computeInitcodeHash(currentTransaction.transaction.input),
             input: {
               constructor: matchConstructorInputs(getABI(contractName, outDir), currentTransaction.arguments),
             },
           };
 
           // Append it to history item
-          contracts[contractName] = nonUpgradeableItem;
+          const storageKey2 = getStorageKey(contractName, nonUpgradeableItem.initcodeHash);
+          contracts[storageKey2] = nonUpgradeableItem;
           // Update latest item
           let copyOfNonUpgradeableItem = { ...nonUpgradeableItem };
           delete copyOfNonUpgradeableItem.input;
           copyOfNonUpgradeableItem.timestamp = jsonData.timestamp;
           copyOfNonUpgradeableItem.commitHash = jsonData.commit;
-          recordData.latest[contractName] = copyOfNonUpgradeableItem;
+          recordData.latest[storageKey2] = copyOfNonUpgradeableItem;
         }
       } else {
         // Contract didn't exist in latest
@@ -194,6 +200,7 @@ async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastD
               version: await getVersion(nextTransaction.contractAddress, rpcUrl),
               proxyType: nextTransaction.contractName,
               deploymentTxn: nextTransaction.hash,
+              initcodeHash: computeInitcodeHash(currentTransaction.transaction.input),
               input: {
                 constructor: matchConstructorInputs(getABI(contractName, outDir), currentTransaction.arguments),
                 initializeData: nextTransaction.arguments[2],
@@ -201,13 +208,14 @@ async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastD
             };
 
             // Append it to history item
-            contracts[contractName] = upgradeableItem;
+            const storageKey3 = getStorageKey(contractName, upgradeableItem.initcodeHash);
+            contracts[storageKey3] = upgradeableItem;
             // Update latest item
             let copyOfUpgradeableItem = { ...upgradeableItem };
             delete copyOfUpgradeableItem.input;
             copyOfUpgradeableItem.timestamp = jsonData.timestamp;
             copyOfUpgradeableItem.commitHash = jsonData.commit;
-            recordData.latest[contractName] = copyOfUpgradeableItem;
+            recordData.latest[storageKey3] = copyOfUpgradeableItem;
 
             proxyFound = true;
           }
@@ -220,19 +228,21 @@ async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastD
             address: currentTransaction.contractAddress,
             version: await getVersion(currentTransaction.contractAddress, rpcUrl),
             deploymentTxn: currentTransaction.hash,
+            initcodeHash: computeInitcodeHash(currentTransaction.transaction.input),
             input: {
               constructor: matchConstructorInputs(getABI(contractName, outDir), currentTransaction.arguments),
             },
           };
 
           // Append it to history item
-          contracts[contractName] = nonUpgradeableItem;
+          const storageKey4 = getStorageKey(contractName, nonUpgradeableItem.initcodeHash);
+          contracts[storageKey4] = nonUpgradeableItem;
           // Update latest item
           let copyOfNonUpgradeableItem = { ...nonUpgradeableItem };
           delete copyOfNonUpgradeableItem.input;
           copyOfNonUpgradeableItem.timestamp = jsonData.timestamp;
           copyOfNonUpgradeableItem.commitHash = jsonData.commit;
-          recordData.latest[contractName] = copyOfNonUpgradeableItem;
+          recordData.latest[storageKey4] = copyOfNonUpgradeableItem;
         }
       }
     } else {
@@ -264,6 +274,10 @@ async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastD
   // sort recordData.history by timestamp
   recordData.history.sort((a, b) => b.timestamp - a.timestamp);
 
+  // ========== APPLY DUPLICATE TAGS ==========
+  recordData.latest = applyDuplicateTags(recordData.latest, tags, tagAddresses);
+  recordData.history = applyDuplicateTagsToHistory(recordData.history, tags, tagAddresses);
+
   // ========== SAVE CHANGES ==========
 
   // Create file if it doesn't exist
@@ -279,6 +293,14 @@ async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastD
 }
 
 // ========== HELPERS ==========
+
+// Generate a unique key for storing in latest (uses initcode hash to prevent overwrites)
+function getStorageKey(contractName, initcodeHash) {
+  if (initcodeHash) {
+    return `${contractName}#${initcodeHash.slice(0, 8)}`;
+  }
+  return contractName;
+}
 
 // IN: contract address and RPC URL
 // OUT: contract version string
@@ -356,6 +378,145 @@ function getABI(contractName, outDir) {
 // Note: Ensures contract artifacts are up-to-date.
 function prepareArtifacts() {
   execSync("forge build");
+}
+
+// Compute full keccak256 hash of initcode (without 0x prefix)
+function computeInitcodeHash(initcode) {
+  const hash = execSync(`cast keccak "${initcode}"`, { encoding: "utf-8" }).trim();
+  return hash.slice(2); // Remove 0x prefix, return full 64-char hash
+}
+
+// Get short version (4 bytes = 8 hex chars) for display
+function getShortHash(fullHash) {
+  return fullHash.slice(0, 8);
+}
+
+// Resolve tag: user-provided (matches short or full hash) > short hash
+function resolveTag(fullHash, address, tags, tagAddresses) {
+  const shortHash = getShortHash(fullHash);
+  if (tagAddresses[address.toLowerCase()]) {
+    return tagAddresses[address.toLowerCase()];
+  }
+  // Match against short hash (what user sees and provides)
+  if (tags[shortHash.toLowerCase()]) {
+    return tags[shortHash.toLowerCase()];
+  }
+  // Also check full hash in case user provided it
+  if (tags[fullHash.toLowerCase()]) {
+    return tags[fullHash.toLowerCase()];
+  }
+  return shortHash;
+}
+
+// Get base contract name (without tag)
+function getBaseName(name) {
+  return name.split("#")[0];
+}
+
+// Check if a tag looks like an auto-generated hash (8 hex chars)
+function isAutoGeneratedTag(tag) {
+  return tag && /^[0-9a-f]{8}$/i.test(tag);
+}
+
+// Apply tags to contracts with duplicate names
+function applyDuplicateTags(latest, tags, tagAddresses) {
+  // Group contracts by base name
+  const contractsByName = {};
+  for (const [name, data] of Object.entries(latest)) {
+    const baseName = getBaseName(name);
+    if (!contractsByName[baseName]) contractsByName[baseName] = [];
+    const existingTag = name.includes("#") ? name.split("#")[1] : null;
+    contractsByName[baseName].push({ name, data, existingTag });
+  }
+
+  // Rename duplicates
+  const renamedLatest = {};
+  for (const [baseName, entries] of Object.entries(contractsByName)) {
+    // Check if there's a real conflict (multiple distinct initcode hashes)
+    const uniqueHashes = new Set(entries.map((e) => e.data.initcodeHash).filter(Boolean));
+    const hasConflict = uniqueHashes.size > 1;
+
+    for (const entry of entries) {
+      const hash = entry.data.initcodeHash;
+
+      // Check if user explicitly provided a tag for this entry
+      const userTag =
+        (hash && (tags[getShortHash(hash).toLowerCase()] || tags[hash.toLowerCase()])) ||
+        tagAddresses[entry.data.address.toLowerCase()];
+
+      if (userTag) {
+        // User provided a tag - always use it
+        renamedLatest[`${baseName}#${userTag}`] = entry.data;
+      } else if (entry.existingTag && !isAutoGeneratedTag(entry.existingTag)) {
+        // Entry has a human-readable tag (not auto-generated hash) - preserve it
+        renamedLatest[`${baseName}#${entry.existingTag}`] = entry.data;
+      } else {
+        // No user tag - keep untagged (may overwrite if conflict)
+        if (hasConflict && renamedLatest[baseName]) {
+          const shortHash = hash ? getShortHash(hash) : "unknown";
+          console.warn(
+            `Warning: Conflict detected for "${baseName}" (hash: ${shortHash}). Overwriting previous entry. Use --tag ${shortHash}:<label> to preserve both.`,
+          );
+        }
+        renamedLatest[baseName] = entry.data;
+      }
+    }
+  }
+  return renamedLatest;
+}
+
+// Apply tags to history entries (only when there's a conflict)
+function applyDuplicateTagsToHistory(history, tags, tagAddresses) {
+  // First, collect all contracts across all history to detect conflicts
+  const allContracts = {};
+  for (const entry of history) {
+    for (const [name, data] of Object.entries(entry.contracts)) {
+      const baseName = getBaseName(name);
+      if (!allContracts[baseName]) allContracts[baseName] = new Set();
+      if (data.initcodeHash) allContracts[baseName].add(data.initcodeHash);
+    }
+  }
+
+  // Determine which base names need tagging (multiple distinct hashes or user provided tag)
+  const needsTagging = new Set();
+  for (const [baseName, hashes] of Object.entries(allContracts)) {
+    if (hashes.size > 1) {
+      needsTagging.add(baseName);
+    }
+  }
+
+  return history.map((entry) => {
+    const taggedContracts = {};
+    for (const [name, data] of Object.entries(entry.contracts)) {
+      const baseName = getBaseName(name);
+      const hash = data.initcodeHash;
+
+      // Check if user explicitly provided a tag for this entry
+      const hasUserTag =
+        (hash && (tags[getShortHash(hash).toLowerCase()] || tags[hash.toLowerCase()])) ||
+        tagAddresses[data.address.toLowerCase()];
+
+      if (needsTagging.has(baseName) || hasUserTag || name.includes("#")) {
+        // Needs tagging due to conflict, user tag, or already tagged
+        if (hash) {
+          const tag = resolveTag(hash, data.address, tags, tagAddresses);
+          taggedContracts[`${baseName}#${tag}`] = data;
+        } else {
+          const addrTag = tagAddresses[data.address.toLowerCase()];
+          if (addrTag) {
+            taggedContracts[`${baseName}#${addrTag}`] = data;
+          } else {
+            // Legacy entry without hash in conflict - warn and keep untagged
+            taggedContracts[baseName] = data;
+          }
+        }
+      } else {
+        // No conflict, keep as base name
+        taggedContracts[baseName] = data;
+      }
+    }
+    return { ...entry, contracts: taggedContracts };
+  });
 }
 
 module.exports = { extractAndSaveJson };

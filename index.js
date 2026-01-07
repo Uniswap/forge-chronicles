@@ -10,10 +10,11 @@ const { generateAndSaveMarkdown } = require("./generateMarkdown.js");
  *  foundry (https://getfoundry.sh) required
  */
 async function main() {
-  let [chainId, scriptName, skipJsonFlag, rpcUrl, explorerUrl, force, broadcastDir, outDir] =
+  let [chainId, scriptName, skipJsonFlag, rpcUrl, explorerUrl, force, broadcastDir, outDir, tags, tagAddresses] =
     validateAndExtractInputs();
   let json;
-  if (!skipJsonFlag) json = await extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastDir, outDir);
+  if (!skipJsonFlag)
+    json = await extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastDir, outDir, tags, tagAddresses);
   else {
     console.log("Skipping json extraction, using existing json file");
     const recordFilePath = path.join(__dirname, `../../deployments/json/${chainId}.json`);
@@ -42,6 +43,8 @@ function validateAndExtractInputs() {
   let explorerUrl = undefined;
   let broadcastDir = "broadcast";
   let outDir = "out";
+  const tags = {}; // { shortInitcodeHash: label }
+  const tagAddresses = {}; // { address: label }
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case "--force":
@@ -107,6 +110,30 @@ function validateAndExtractInputs() {
           console.error("Error: --out-dir flag requires a directory path");
           process.exit(1);
         }
+      case "-t":
+      case "--tag":
+        // Map initcode hash to friendly label (repeatable)
+        if (i + 1 < args.length && args[i + 1].charAt(0) !== "-") {
+          const [hash, label] = args[i + 1].split(":");
+          if (hash && label) tags[hash.toLowerCase()] = label;
+          i++;
+          break;
+        } else {
+          console.error("Error: --tag flag requires format <hash>:<label>");
+          process.exit(1);
+        }
+      case "-ta":
+      case "--tag-address":
+        // Map address to friendly label for legacy entries (repeatable)
+        if (i + 1 < args.length && args[i + 1].charAt(0) !== "-") {
+          const [addr, label] = args[i + 1].split(":");
+          if (addr && label) tagAddresses[addr.toLowerCase()] = label;
+          i++;
+          break;
+        } else {
+          console.error("Error: --tag-address flag requires format <address>:<label>");
+          process.exit(1);
+        }
       default:
         printHelp();
         process.exit(1);
@@ -119,12 +146,12 @@ function validateAndExtractInputs() {
     process.exit(1);
   }
 
-  return [chainId, scriptName, skipJsonFlag, rpcUrl, explorerUrl, forceFlag, broadcastDir, outDir];
+  return [chainId, scriptName, skipJsonFlag, rpcUrl, explorerUrl, forceFlag, broadcastDir, outDir, tags, tagAddresses];
 }
 
 const printHelp = () => {
   console.log(
-    "\nUsage: node lib/forge-chronicles <scriptName> [-c chain-id] [-r rpc-url] [-e explorer-url] [-s skip-json] [-b broadcast-dir] [-o out-dir]\n\nCommands:\n  -c, --chain-id\tChain id of the network where the script was executed (default: 31337)\n  -r, --rpc-url\t\tRPC url used to fetch the version of the contract or verify an upgrade. If no rpc url is provided, version fetching is skipped.\n  -e, --explorer-url\tExplorer url to use for links in markdown, If no url is provided, blockscan is used by default.\n  -s, --skip-json\tSkips the json generation and creates the markdown file using an existing json file\n  -b, --broadcast-dir\tDirectory where the broadcast files are stored (default: broadcast)\n  -o, --out-dir\t\tDirectory where the foundry output files are stored (default: out)\n  -f, --force\t\tForce the generation of the json file with the same commit\n\nOptions:\n  -h, --help\t\tPrint help\n  -v, --version\t\tPrint version\n\nDocumentation can be found at https://github.com/0xPolygon/forge-chronicles",
+    "\nUsage: node lib/forge-chronicles <scriptName> [-c chain-id] [-r rpc-url] [-e explorer-url] [-s skip-json] [-b broadcast-dir] [-o out-dir]\n\nCommands:\n  -c, --chain-id\tChain id of the network where the script was executed (default: 31337)\n  -r, --rpc-url\t\tRPC url used to fetch the version of the contract or verify an upgrade. If no rpc url is provided, version fetching is skipped.\n  -e, --explorer-url\tExplorer url to use for links in markdown, If no url is provided, blockscan is used by default.\n  -s, --skip-json\tSkips the json generation and creates the markdown file using an existing json file\n  -b, --broadcast-dir\tDirectory where the broadcast files are stored (default: broadcast)\n  -o, --out-dir\t\tDirectory where the foundry output files are stored (default: out)\n  -f, --force\t\tForce the generation of the json file with the same commit\n  -t, --tag\t\tMap initcode hash to friendly label (repeatable). Format: <hash>:<label>\n  -ta, --tag-address\tMap address to friendly label for legacy entries (repeatable). Format: <address>:<label>\n\nOptions:\n  -h, --help\t\tPrint help\n  -v, --version\t\tPrint version\n\nDocumentation can be found at https://github.com/0xPolygon/forge-chronicles",
   );
 };
 
