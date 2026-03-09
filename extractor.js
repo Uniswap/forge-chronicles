@@ -14,7 +14,16 @@ Note: Only TransparentUpgradeableProxy by OpenZeppelin is supported at the momen
 */
 
 // Note: Do not force in production.
-async function extractAndSaveJson(scriptName, chainId, rpcUrl, force, broadcastDir, outDir, tags = {}, tagAddresses = {}) {
+async function extractAndSaveJson(
+  scriptName,
+  chainId,
+  rpcUrl,
+  force,
+  broadcastDir,
+  outDir,
+  tags = {},
+  tagAddresses = {},
+) {
   // ========== PREPARE FILES ==========
 
   // Latest broadcast
