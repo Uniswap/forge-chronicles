@@ -1,0 +1,4 @@
+{
+    "_comment": "Chain names that take precedence over chains.json (a snapshot of chainid.network). Use when the public registry is stale or lists a different network under the same chain id.",
+    "999": "HyperEVM Mainnet"
+}
