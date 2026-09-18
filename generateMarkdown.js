@@ -270,8 +270,8 @@ ${
         isAddress(value) || isTransaction(value)
           ? getEtherscanLinkAnchor(chainId, value, isTransaction(value) ? "tx" : "address")
           : typeof value === "object" && value !== null
-            ? JSON.stringify(value)
-            : value
+          ? JSON.stringify(value)
+          : value
       }</td>
     </tr>`,
       )
@@ -333,7 +333,10 @@ function getProjectUrl() {
 function getProjectName() {
   // works for both https://github.com/org/repo.git and git@github.com:org/repo.git
   const url = execSync("git remote get-url origin", { encoding: "utf-8" }).trim();
-  return url.replace(/\.git$/, "").split(/[/:]/).pop();
+  return url
+    .replace(/\.git$/, "")
+    .split(/[/:]/)
+    .pop();
 }
 
 module.exports = { generateAndSaveMarkdown };
