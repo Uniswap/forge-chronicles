@@ -2,12 +2,16 @@ const { execSync } = require("child_process");
 const { writeFileSync, readdirSync, existsSync, readFileSync } = require("fs");
 const { join } = require("path");
 const chains = require("./chains.json");
+const chainOverrides = require("./chain-overrides.json");
 
 const projectGitUrl = getProjectUrl();
 const projectName = getProjectName();
 let explorer;
 
 function getNetworkName(chainId) {
+  // chain-overrides.json wins over chains.json: the public registry can be stale or list another
+  // network under the same id (e.g. 999 is HyperEVM, chainid.network still says Wanchain Testnet)
+  if (chainOverrides[String(chainId)]) return chainOverrides[String(chainId)];
   const chain = chains.find((chain) => chain.chainId === parseInt(chainId));
   return chain?.name || `Chain ${chainId}`;
 }
@@ -327,7 +331,9 @@ function getProjectUrl() {
 }
 
 function getProjectName() {
-  return execSync(`git remote get-url origin | cut -d '/' -f 5 | cut -d '.' -f 1`, { encoding: "utf-8" }).trim();
+  // works for both https://github.com/org/repo.git and git@github.com:org/repo.git
+  const url = execSync("git remote get-url origin", { encoding: "utf-8" }).trim();
+  return url.replace(/\.git$/, "").split(/[/:]/).pop();
 }
 
 module.exports = { generateAndSaveMarkdown };
