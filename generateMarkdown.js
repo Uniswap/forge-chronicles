@@ -55,9 +55,9 @@ function generateAndSaveMarkdown(input, explorerUrl) {
     .map(
       ([
         contractName,
-        { address, deploymentTxn, version, commitHash, timestamp, proxyType, implementation, proxyAdmin },
+        { address, deploymentTxn, version, commitHash, timestamp, proxyType, implementation, proxyAdmin, note },
       ]) => `### ${prettifyContractName(contractName)}
-
+${note ? `\n> ${note}\n` : ""}
 Address: ${getEtherscanLinkMd(input.chainId, address)}
 
 ${deploymentTxn ? `Deployment Transaction: ${getEtherscanLinkMd(input.chainId, deploymentTxn, "tx")}` : ""}
