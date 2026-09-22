@@ -2,12 +2,16 @@ const { execSync } = require("child_process");
 const { writeFileSync, readdirSync, existsSync, readFileSync } = require("fs");
 const { join } = require("path");
 const chains = require("./chains.json");
+const chainOverrides = require("./chain-overrides.json");
 
 const projectGitUrl = getProjectUrl();
 const projectName = getProjectName();
 let explorer;
 
 function getNetworkName(chainId) {
+  // chain-overrides.json wins over chains.json: the public registry can be stale or list another
+  // network under the same id (e.g. 999 is HyperEVM, chainid.network still says Wanchain Testnet)
+  if (chainOverrides[String(chainId)]) return chainOverrides[String(chainId)];
   const chain = chains.find((chain) => chain.chainId === parseInt(chainId));
   return chain?.name || `Chain ${chainId}`;
 }
@@ -51,9 +55,9 @@ function generateAndSaveMarkdown(input, explorerUrl) {
     .map(
       ([
         contractName,
-        { address, deploymentTxn, version, commitHash, timestamp, proxyType, implementation, proxyAdmin },
+        { address, deploymentTxn, version, commitHash, timestamp, proxyType, implementation, proxyAdmin, note },
       ]) => `### ${prettifyContractName(contractName)}
-
+${note ? `\n> ${note}\n` : ""}
 Address: ${getEtherscanLinkMd(input.chainId, address)}
 
 ${deploymentTxn ? `Deployment Transaction: ${getEtherscanLinkMd(input.chainId, deploymentTxn, "tx")}` : ""}
@@ -266,8 +270,8 @@ ${
         isAddress(value) || isTransaction(value)
           ? getEtherscanLinkAnchor(chainId, value, isTransaction(value) ? "tx" : "address")
           : typeof value === "object" && value !== null
-            ? JSON.stringify(value)
-            : value
+          ? JSON.stringify(value)
+          : value
       }</td>
     </tr>`,
       )
@@ -327,7 +331,12 @@ function getProjectUrl() {
 }
 
 function getProjectName() {
-  return execSync(`git remote get-url origin | cut -d '/' -f 5 | cut -d '.' -f 1`, { encoding: "utf-8" }).trim();
+  // works for both https://github.com/org/repo.git and git@github.com:org/repo.git
+  const url = execSync("git remote get-url origin", { encoding: "utf-8" }).trim();
+  return url
+    .replace(/\.git$/, "")
+    .split(/[/:]/)
+    .pop();
 }
 
 module.exports = { generateAndSaveMarkdown };
