@@ -363,6 +363,10 @@ function matchConstructorInputs(abi, inputData) {
         inputMapping[input.name] = {};
         // trim the brackets and split by comma
         let data = inputData[index].slice(1, -1).split(", ");
+        if (data.length !== input.components.length) {
+          console.error(`Couldn't match ${input.name} tuple components. Aborted.`);
+          process.exit(1);
+        }
         for (let i = 0; i < input.components.length; i++) {
           inputMapping[input.name][input.components[i].name] = data[i];
         }
