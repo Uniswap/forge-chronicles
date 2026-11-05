@@ -362,7 +362,7 @@ function matchConstructorInputs(abi, inputData) {
         // if input is a mapping, extract individual key value pairs
         inputMapping[input.name] = {};
         // trim the brackets and split by comma
-        let data = inputData[index].slice(1, inputData[index].length - 2).split(", ");
+        let data = inputData[index].slice(1, -1).split(", ");
         for (let i = 0; i < input.components.length; i++) {
           inputMapping[input.name][input.components[i].name] = data[i];
         }
