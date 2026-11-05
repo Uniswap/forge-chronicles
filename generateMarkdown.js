@@ -325,9 +325,11 @@ function getContractAnchorId(name) {
 }
 
 function getProjectUrl() {
+  // commit links need a browsable URL, so an ssh remote (git@github.com:org/repo.git) becomes https
   return execSync(`git remote get-url origin`, { encoding: "utf-8" })
     .trim()
-    .replace(/\.git$/, "");
+    .replace(/\.git$/, "")
+    .replace(/^git@([^:]+):/, "https://$1/");
 }
 
 function getProjectName() {
