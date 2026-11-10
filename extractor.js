@@ -2,6 +2,15 @@ const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 
+// Foundry historically wrote broadcast timestamps in seconds; newer versions
+// write milliseconds. Normalize to milliseconds so history sorting and
+// markdown generation stay consistent across mixed records.
+function normalizeTimestamp(timestamp) {
+  if (timestamp == null || Number.isNaN(Number(timestamp))) return timestamp;
+  const n = Number(timestamp);
+  return n < 1e12 ? n * 1000 : n;
+}
+
 // ========== ABOUT ==========
 
 /*
@@ -159,7 +168,7 @@ async function extractAndSaveJson(
           // Update latest item
           let copyOfUpgradeableItem = { ...upgradeableItem };
           delete copyOfUpgradeableItem.input;
-          copyOfUpgradeableItem.timestamp = jsonData.timestamp;
+          copyOfUpgradeableItem.timestamp = normalizeTimestamp(jsonData.timestamp);
           copyOfUpgradeableItem.commitHash = jsonData.commit;
           recordData.latest[storageKey1] = copyOfUpgradeableItem;
         } else {
@@ -182,7 +191,7 @@ async function extractAndSaveJson(
           // Update latest item
           let copyOfNonUpgradeableItem = { ...nonUpgradeableItem };
           delete copyOfNonUpgradeableItem.input;
-          copyOfNonUpgradeableItem.timestamp = jsonData.timestamp;
+          copyOfNonUpgradeableItem.timestamp = normalizeTimestamp(jsonData.timestamp);
           copyOfNonUpgradeableItem.commitHash = jsonData.commit;
           recordData.latest[storageKey2] = copyOfNonUpgradeableItem;
         }
@@ -222,7 +231,7 @@ async function extractAndSaveJson(
             // Update latest item
             let copyOfUpgradeableItem = { ...upgradeableItem };
             delete copyOfUpgradeableItem.input;
-            copyOfUpgradeableItem.timestamp = jsonData.timestamp;
+            copyOfUpgradeableItem.timestamp = normalizeTimestamp(jsonData.timestamp);
             copyOfUpgradeableItem.commitHash = jsonData.commit;
             recordData.latest[storageKey3] = copyOfUpgradeableItem;
 
@@ -249,7 +258,7 @@ async function extractAndSaveJson(
           // Update latest item
           let copyOfNonUpgradeableItem = { ...nonUpgradeableItem };
           delete copyOfNonUpgradeableItem.input;
-          copyOfNonUpgradeableItem.timestamp = jsonData.timestamp;
+          copyOfNonUpgradeableItem.timestamp = normalizeTimestamp(jsonData.timestamp);
           copyOfNonUpgradeableItem.commitHash = jsonData.commit;
           recordData.latest[storageKey4] = copyOfNonUpgradeableItem;
         }
@@ -276,7 +285,7 @@ async function extractAndSaveJson(
 
   recordData.history.push({
     contracts,
-    timestamp: jsonData.timestamp,
+    timestamp: normalizeTimestamp(jsonData.timestamp),
     commitHash: jsonData.commit,
   });
 

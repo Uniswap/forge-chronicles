@@ -202,7 +202,7 @@ function generateDeploymentHistory(history, chainId) {
       (highest, { version }) => (version && version > highest ? version : highest),
       ghostVersion,
     );
-    const key = highestVersion === ghostVersion ? new Date(timestamp).toDateString() : highestVersion;
+    const key = highestVersion === ghostVersion ? new Date(normalizeTimestamp(timestamp)).toDateString() : highestVersion;
     obj[key] = [
       ...(obj[key] || []),
       ...Object.entries(contracts).map(([contractName, contract]) => ({
@@ -294,8 +294,16 @@ ${
   return { deploymentHistoryMd: out, allVersions };
 }
 
+// Foundry historically wrote broadcast timestamps in seconds; newer versions
+// write milliseconds. Values below 1e12 are treated as seconds.
+function normalizeTimestamp(timestamp) {
+  if (timestamp == null || Number.isNaN(Number(timestamp))) return timestamp;
+  const n = Number(timestamp);
+  return n < 1e12 ? n * 1000 : n;
+}
+
 function prettifyTimestamp(timestamp) {
-  return new Date(timestamp).toUTCString().replace("GMT", "UTC") + "\n";
+  return new Date(normalizeTimestamp(timestamp)).toUTCString().replace("GMT", "UTC") + "\n";
 }
 
 function isTransaction(str) {
